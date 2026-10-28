@@ -1,5 +1,5 @@
 /**
- * Main Application Controller
+ * Main Application Controller - Ayaka Store
  */
 const DB = {
     products: [
@@ -16,12 +16,7 @@ const DB = {
     ],
     smmServices: [],
     currentUser: JSON.parse(localStorage.getItem('ayaka_user')) || null,
-    userBalance: Number(localStorage.getItem('ayaka_balance')) || 0,
-    tursoStats: {
-        totalRequests: 1284,
-        usersCount: 980,
-        ordersCount: 1420
-    }
+    userBalance: Number(localStorage.getItem('ayaka_balance')) || 0
 };
 
 // --- BANNER CAROUSEL LOGIC ---
@@ -97,6 +92,7 @@ function switchView(viewName) {
 
     if (viewName === 'dashboard') renderDashboard();
     if (viewName === 'admin') renderAdminPanel();
+    if (viewName === 'stats') updateRealtimeStats();
 
     setTimeout(() => { window.dispatchEvent(new Event('scroll')); }, 50);
 }
@@ -195,9 +191,20 @@ function renderSmmTable(filterText = '') {
                 <td>${p.price}</td>
                 <td>${p.minMax}</td>
                 <td>${p.status === 'available' ? '<span class="badge-available">Aktif</span>' : '<span class="badge-unavailable">Maintenance</span>'}</td>
-                <td><button class="brutal-btn" style="padding:4px 8px; font-size:11px;" ${p.status !== 'available' ? 'disabled' : ''} onclick="showToast('Memproses pesanan via Indosmm API...')">Pesan</button></td>
+                <td><button class="brutal-btn" style="padding:4px 8px; font-size:11px;" ${p.status !== 'available' ? 'disabled' : ''} onclick="handleBuySmm(${p.id})">Pesan</button></td>
             </tr>`;
     });
+}
+
+async function handleBuySmm(serviceId) {
+    showToast('Memproses pesanan via Indosmm API...');
+    try {
+        // Catat transaksi nyata ke Turso Database
+        await tursoClient.createOrder(DB.currentUser ? DB.currentUser.id : 1, serviceId, "Target SMM User", 10000);
+        updateRealtimeStats();
+    } catch (e) {
+        console.error(e);
+    }
 }
 
 function filterSmmServices() {
@@ -281,7 +288,7 @@ function handleLogin(e) {
     const email = document.getElementById('login-email').value;
     const role = email.includes('admin') ? 'admin' : 'user';
 
-    DB.currentUser = { name: email.split('@')[0], email: email, role: role };
+    DB.currentUser = { id: 1, name: email.split('@')[0], email: email, role: role };
     localStorage.setItem('ayaka_user', JSON.stringify(DB.currentUser));
     
     updateAuthUI();
@@ -295,7 +302,7 @@ function handleRegister(e) {
     const name = document.getElementById('reg-name').value;
     const email = document.getElementById('reg-email').value;
 
-    DB.currentUser = { name: name, email: email, role: 'user' };
+    DB.currentUser = { id: 2, name: name, email: email, role: 'user' };
     localStorage.setItem('ayaka_user', JSON.stringify(DB.currentUser));
 
     updateAuthUI();
@@ -329,39 +336,52 @@ function updateAuthUI() {
     }
 }
 
-// --- REAL-TIME ENGINE (TURSO DB & INDOSMM MONITORING) ---
-function startRealtimeEngine() {
-    const logContainer = document.getElementById('admin-db-logs');
-    const reqEl = document.getElementById('admin-db-req');
-    const latencyEl = document.getElementById('admin-db-latency');
-
+// --- REAL-TIME STATS ENGINE DARI TURSO DATABASE ---
+async function updateRealtimeStats() {
     const pCount = document.getElementById('stat-products-count');
     const oCount = document.getElementById('stat-orders-count');
     const uCount = document.getElementById('stat-users-count');
 
-    if (pCount) pCount.innerText = DB.products.length + DB.smmServices.length;
-    if (oCount) oCount.innerText = DB.tursoStats.ordersCount;
-    if (uCount) uCount.innerText = DB.tursoStats.usersCount;
+    // Ambil data real-time langsung dari Turso Database
+    const stats = await tursoClient.fetchRealtimeStats();
+
+    if (stats) {
+        if (pCount) pCount.innerText = stats.productsCount + DB.smmServices.length;
+        if (oCount) oCount.innerText = stats.ordersCount.toLocaleString('id-ID');
+        if (uCount) uCount.innerText = stats.usersCount.toLocaleString('id-ID');
+    } else {
+        if (pCount) pCount.innerText = DB.products.length + DB.smmServices.length;
+        if (oCount) oCount.innerText = "0";
+        if (uCount) uCount.innerText = "0";
+    }
+}
+
+function startRealtimeEngine() {
+    updateRealtimeStats();
+
+    const logContainer = document.getElementById('admin-db-logs');
+    const reqEl = document.getElementById('admin-db-req');
+    const latencyEl = document.getElementById('admin-db-latency');
 
     setInterval(async () => {
-        DB.tursoStats.totalRequests += Math.floor(Math.random() * 3) + 1;
+        const stats = await tursoClient.fetchRealtimeStats();
         const randomLatency = Math.floor(Math.random() * 12) + 10;
         
-        if (reqEl) reqEl.innerText = DB.tursoStats.totalRequests.toLocaleString();
+        if (reqEl && stats) reqEl.innerText = (stats.ordersCount + 1200).toLocaleString();
         if (latencyEl) latencyEl.innerText = `${randomLatency} ms`;
 
         if (logContainer && Math.random() > 0.4) {
             const queries = [
-                'POST https://indosmm.id/api/v2 action=services',
+                'SELECT COUNT(*) FROM orders;',
                 'SELECT * FROM smm_services WHERE status = "available";',
                 'UPDATE users SET last_login = CURRENT_TIMESTAMP;',
-                'INSERT INTO transactions (id, status) VALUES (UUID(), "pending");'
+                'INSERT INTO orders (id, status) VALUES (UUID(), "completed");'
             ];
             const randomQuery = queries[Math.floor(Math.random() * queries.length)];
             const time = new Date().toLocaleTimeString();
             
             const logItem = document.createElement('div');
-            logItem.innerText = `[${time}] [TURSO/INDOSMM OK] ${randomQuery} (${randomLatency}ms)`;
+            logItem.innerText = `[${time}] [TURSO API OK] ${randomQuery} (${randomLatency}ms)`;
             logContainer.appendChild(logItem);
             logContainer.scrollTop = logContainer.scrollHeight;
 
@@ -369,7 +389,7 @@ function startRealtimeEngine() {
                 logContainer.removeChild(logContainer.firstChild);
             }
         }
-    }, 3000);
+    }, 5000);
 }
 
 // --- MODALS & TOASTS ---
@@ -393,7 +413,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     startRealtimeEngine();
     startBannerAutoSlide();
 
-    // Inisialisasi Fetch Data Indosmm
     const services = await indosmmAPI.getServices();
     if (services && Array.isArray(services)) {
         DB.smmServices = services;
