@@ -3,69 +3,61 @@
  */
 class IndosmmAPI {
     constructor() {
-        this.baseUrl = CONFIG.INDOSMM.BASE_URL;
-        this.apiKey = CONFIG.INDOSMM.DEFAULT_API_KEY;
+        this.baseUrl = "https://indosmm.id/api/v2";
     }
 
-    setApiKey(key) {
-        this.apiKey = key;
-        localStorage.setItem('indosmm_api_key', key);
-    }
-
-    // Request daftar layanan dari Indosmm SMM API
-    async getServices() {
-        if (!this.apiKey) {
-            console.warn("[INDOSMM API] API Key kosong, menggunakan data simulasi.");
-            return this.getMockServices();
+    // Mengambil seluruh ~9.686 layanan dari Indosmm secara real-time
+    async getServices(apiKey) {
+        if (!apiKey) {
+            console.warn("[INDOSMM API] API Key kosong.");
+            return [];
         }
 
         try {
-            const formData = new FormData();
-            formData.append("api_key", this.apiKey);
-            formData.append("action", "services");
-
             const response = await fetch(this.baseUrl, {
                 method: "POST",
-                body: formData
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    api_key: apiKey,
+                    action: "services"
+                })
             });
 
             const data = await response.json();
-            return data;
+            if (Array.isArray(data)) {
+                return data; // Mengembalikan array berisi ribuan layanan asli Indosmm
+            }
+            return [];
         } catch (err) {
             console.error("[INDOSMM API Error]", err);
-            return this.getMockServices();
+            return [];
         }
     }
 
-    // Order Layanan SMM via API
-    async placeOrder(serviceId, target, quantity) {
-        if (!this.apiKey) {
-            throw new Error("API Key Indosmm belum diset!");
+    // Eksekusi pesanan nyata ke Indosmm
+    async placeOrder(apiKey, serviceId, target, quantity) {
+        if (!apiKey) {
+            throw new Error("API Key Indosmm belum diatur!");
         }
 
-        const formData = new FormData();
-        formData.append("api_key", this.apiKey);
-        formData.append("action", "add");
-        formData.append("service", serviceId);
-        formData.append("target", target);
-        formData.append("quantity", quantity);
+        try {
+            const response = await fetch(this.baseUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    api_key: apiKey,
+                    action: "add",
+                    service: serviceId,
+                    target: target,
+                    quantity: quantity
+                })
+            });
 
-        const response = await fetch(this.baseUrl, {
-            method: "POST",
-            body: formData
-        });
-
-        return await response.json();
-    }
-
-    // Data cadangan jika API belum diisi Key
-    getMockServices() {
-        return [
-            { service: 101, name: '[API] Instagram Followers Indonesia Real 30 Hari', category: 'Instagram Followers', rate: '15000', min: '100', max: '10000', status: 'available' },
-            { service: 102, name: '[API] TikTok Likes Instant High Quality', category: 'TikTok Likes', rate: '2500', min: '50', max: '50000', status: 'available' },
-            { service: 103, name: '[API] YouTube Views Retention 100% Non-Drop', category: 'YouTube Views', rate: '32000', min: '500', max: '100000', status: 'available' },
-            { service: 104, name: '[API] Telegram Channel Members Fast Speed', category: 'Telegram', rate: '12000', min: '200', max: '25000', status: 'available' }
-        ];
+            return await response.json();
+        } catch (err) {
+            console.error("[INDOSMM ORDER ERROR]", err);
+            return { error: true, message: err.message };
+        }
     }
 }
 
