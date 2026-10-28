@@ -10,11 +10,10 @@ const DB = {
         { id: 10, type: 'app', name: 'Alight Motion', desc: 'Akses fitur motion graphics dan efek video premium.', status: 'unavailable', price: 'Varian', icon: '📹' },
         { id: 5, type: 'game', name: 'Mobile Legends Diamond', desc: 'Top up Instant MLBB via User ID & Zone ID.', status: 'unavailable', price: 'Varian', icon: '⚔️' },
         { id: 6, type: 'game', name: 'Free Fire Diamonds', desc: 'Pengisian kilat Free Fire via Player ID resmi.', status: 'unavailable', price: 'Varian', icon: '🔥' },
-        { id: 7, type: 'game', name: 'Genshin Impact Genesis Crystal', desc: 'Blessing of the Welkin Moon & Genesis Crystals.', status: 'unavailable', price: 'Varian', icon: '✨' },
-        { id: 8, type: 'smm', name: 'Instagram Followers High Quality', category: 'Instagram', minMax: '100 / 50.000', price: 'Rp 12.500', status: 'available' },
-        { id: 9, type: 'smm', name: 'TikTok Views Instant Real', category: 'TikTok', minMax: '500 / 1.000.000', price: 'Rp 1.500', status: 'available' }
+        { id: 7, type: 'game', name: 'Genshin Impact Genesis Crystal', desc: 'Blessing of the Welkin Moon & Genesis Crystals.', status: 'unavailable', price: 'Varian', icon: '✨' }
     ],
     smmServices: [],
+    indosmmKey: localStorage.getItem('indosmm_api_key') || '',
     currentUser: JSON.parse(localStorage.getItem('ayaka_user')) || null,
     userBalance: Number(localStorage.getItem('ayaka_balance')) || 0
 };
@@ -102,7 +101,7 @@ function toggleSidebar() {
     sidebar.classList.toggle('active');
 }
 
-// --- RENDER PRODUCTS & SMM FILTER ---
+// --- RENDER PRODUCTS & SMM TABLE ---
 function renderProducts() {
     const appGrid = document.getElementById('app-grid');
     const gameGrid = document.getElementById('game-grid');
@@ -119,17 +118,14 @@ function renderProducts() {
                             <div class="product-icon-box"><span>${p.icon}</span></div>
                             <div>
                                 <div class="product-title">${p.name}</div>
-                                ${p.status === 'unavailable' ? '<span class="badge-unavailable">Belum Tersedia</span>' : '<span class="badge-available">Tersedia</span>'}
+                                <span class="badge-unavailable">Belum Tersedia</span>
                             </div>
                         </div>
                         <div class="product-desc">${p.desc}</div>
                         <div class="product-price">${p.price}</div>
                     </div>
                     <div class="product-footer">
-                        ${p.status === 'unavailable' 
-                            ? `<p style="font-size: 11px; color:#666; margin-bottom: 6px;">Tahap persiapan & pembaruan.</p><button class="brutal-btn disabled" disabled>Belum Tersedia</button>`
-                            : `<button class="brutal-btn" onclick="showToast('Pemesanan diproses!')">Beli Sekarang</button>`
-                        }
+                        <button class="brutal-btn disabled" disabled>Belum Tersedia</button>
                     </div>
                 </div>`;
         } else if (p.type === 'game' && gameGrid) {
@@ -146,7 +142,6 @@ function renderProducts() {
                         <div class="product-desc">${p.desc}</div>
                     </div>
                     <div class="product-footer">
-                        <p style="font-size: 11px; color:#666; margin-bottom: 6px;">Sistem topup sedang dikonfigurasi.</p>
                         <button class="brutal-btn disabled" disabled>Belum Tersedia</button>
                     </div>
                 </div>`;
@@ -162,19 +157,15 @@ function renderSmmTable(filterText = '') {
 
     smmTableBody.innerHTML = '';
 
-    const allSmm = [...DB.products.filter(p => p.type === 'smm'), ...DB.smmServices.map(s => ({
-        id: s.service,
-        name: s.name,
-        category: s.category,
-        price: 'Rp ' + Number(s.rate).toLocaleString('id-ID'),
-        minMax: `${s.min} / ${s.max}`,
-        status: s.status
-    }))];
+    if (DB.smmServices.length === 0) {
+        smmTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color:#666; font-weight:700;">Memuat layanan dari Indosmm API... (Pastikan API Key sudah diset di Panel Admin)</td></tr>`;
+        return;
+    }
 
-    const filtered = allSmm.filter(p => 
-        p.name.toLowerCase().includes(filterText.toLowerCase()) || 
-        (p.category && p.category.toLowerCase().includes(filterText.toLowerCase())) ||
-        String(p.id).includes(filterText)
+    const filtered = DB.smmServices.filter(s => 
+        s.name.toLowerCase().includes(filterText.toLowerCase()) || 
+        (s.category && s.category.toLowerCase().includes(filterText.toLowerCase())) ||
+        String(s.service).includes(filterText)
     );
 
     if (filtered.length === 0) {
@@ -182,34 +173,59 @@ function renderSmmTable(filterText = '') {
         return;
     }
 
-    filtered.forEach(p => {
+    // Batasi render maksimal 100 data pertama saat pencarian kosong agar performa browser tetap ringan, atau tampilkan semua sesuai filter
+    const displayList = filtered.slice(0, 150);
+
+    displayList.forEach(s => {
         smmTableBody.innerHTML += `
             <tr>
-                <td>#${p.id}</td>
-                <td>${p.name}</td>
-                <td>${p.category || 'General'}</td>
-                <td>${p.price}</td>
-                <td>${p.minMax}</td>
-                <td>${p.status === 'available' ? '<span class="badge-available">Aktif</span>' : '<span class="badge-unavailable">Maintenance</span>'}</td>
-                <td><button class="brutal-btn" style="padding:4px 8px; font-size:11px;" ${p.status !== 'available' ? 'disabled' : ''} onclick="handleBuySmm(${p.id})">Pesan</button></td>
+                <td>#${s.service}</td>
+                <td>${s.name}</td>
+                <td>${s.category || 'General'}</td>
+                <td>Rp ${Number(s.rate).toLocaleString('id-ID')}</td>
+                <td>${s.min} / ${s.max}</td>
+                <td><span class="badge-available">AKTIF</span></td>
+                <td><button class="brutal-btn" style="padding:4px 8px; font-size:11px;" onclick="handleBuySmm(${s.service}, '${s.name.replace(/'/g, "")}', ${s.rate})">PESAN</button></td>
             </tr>`;
     });
-}
-
-async function handleBuySmm(serviceId) {
-    showToast('Memproses pesanan via Indosmm API...');
-    try {
-        // Catat transaksi nyata ke Turso Database
-        await tursoClient.createOrder(DB.currentUser ? DB.currentUser.id : 1, serviceId, "Target SMM User", 10000);
-        updateRealtimeStats();
-    } catch (e) {
-        console.error(e);
-    }
 }
 
 function filterSmmServices() {
     const query = document.getElementById('smm-search-input').value;
     renderSmmTable(query);
+}
+
+// --- EKSEKUSI NYATA PEMESANAN SMM ---
+async function handleBuySmm(serviceId, serviceName, rate) {
+    if (!DB.indosmmKey) {
+        showToast('⚠️ Masukkan API Key Indosmm terlebih dahulu di Panel Admin!');
+        switchView('admin');
+        return;
+    }
+
+    const target = prompt(`Masukkan Target (Link / Username) untuk Layanan #${serviceId}\n(${serviceName}):`);
+    if (!target) return;
+
+    const quantity = prompt("Masukkan Jumlah (Quantity) Pesanan:", "100");
+    if (!quantity || isNaN(quantity)) return;
+
+    showToast('⚡ Mengirim pesanan ke Indosmm API...');
+
+    try {
+        const result = await indosmmAPI.placeOrder(DB.indosmmKey, serviceId, target, quantity);
+        
+        if (result && result.order) {
+            showToast(`✅ Berhasil! ID Order Indosmm: #${result.order}`);
+            // Catat transaksi nyata ke Turso Database
+            await tursoClient.createOrder(DB.currentUser ? DB.currentUser.id : 1, serviceId, target, Number(rate) * (quantity / 1000));
+            updateRealtimeStats();
+        } else {
+            showToast(`❌ Gagal: ${result.error || 'Periksa kembali saldo / API Key Anda'}`);
+        }
+    } catch (err) {
+        showToast('❌ Koneksi ke API Indosmm gagal.');
+        console.error(err);
+    }
 }
 
 function toggleFaq(element) {
@@ -257,13 +273,11 @@ function renderAdminPanel() {
                     <strong style="font-size:14px;">${p.name}</strong> <span style="font-size:11px;">(${p.type.toUpperCase()})</span>
                     <br><small style="font-size:12px;">Status: ${p.status}</small>
                 </div>
-                <button class="brutal-btn secondary" style="font-size:11px; padding:4px 8px;" onclick="toggleProductStatus(${p.id})">
-                    Ubah Status
-                </button>
+                <button class="brutal-btn secondary" style="font-size:11px; padding:4px 8px;" onclick="toggleProductStatus(${p.id})">Ubah Status</button>
             </div>`;
     });
     const keyInput = document.getElementById('admin-indosmm-key');
-    if (keyInput) keyInput.value = CONFIG.INDOSMM.DEFAULT_API_KEY;
+    if (keyInput) keyInput.value = DB.indosmmKey;
 }
 
 function toggleProductStatus(id) {
@@ -276,13 +290,25 @@ function toggleProductStatus(id) {
     }
 }
 
-function saveIndosmmKey() {
-    const key = document.getElementById('admin-indosmm-key').value;
-    indosmmAPI.setApiKey(key);
-    showToast('API Key Indosmm berhasil disimpan!');
+async function saveIndosmmKey() {
+    const key = document.getElementById('admin-indosmm-key').value.trim();
+    DB.indosmmKey = key;
+    localStorage.setItem('indosmm_api_key', key);
+    showToast('API Key Indosmm disimpan! Memuat ulang layanan...');
+    
+    // Muat ulang ribuan layanan dari Indosmm dengan API Key baru
+    const services = await indosmmAPI.getServices(DB.indosmmKey);
+    if (services && Array.isArray(services)) {
+        DB.smmServices = services;
+        renderSmmTable();
+        updateRealtimeStats();
+        showToast(`✅ Berhasil memuat ${services.length.toLocaleString('id-ID')} layanan dari Indosmm!`);
+    } else {
+        showToast('❌ Gagal memuat layanan. Periksa kembali API Key Anda.');
+    }
 }
 
-// --- AUTHENTICATION HANDLERS ---
+// --- AUTHENTICATION ---
 function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value;
@@ -336,21 +362,21 @@ function updateAuthUI() {
     }
 }
 
-// --- REAL-TIME STATS ENGINE DARI TURSO DATABASE ---
+// --- REAL-TIME STATS ENGINE (TURSO DB & INDOSMM) ---
 async function updateRealtimeStats() {
     const pCount = document.getElementById('stat-products-count');
     const oCount = document.getElementById('stat-orders-count');
     const uCount = document.getElementById('stat-users-count');
 
-    // Ambil data real-time langsung dari Turso Database
     const stats = await tursoClient.fetchRealtimeStats();
+    const totalServicesCount = DB.smmServices.length > 0 ? DB.smmServices.length : 10;
 
     if (stats) {
-        if (pCount) pCount.innerText = stats.productsCount + DB.smmServices.length;
+        if (pCount) pCount.innerText = (stats.productsCount + totalServicesCount).toLocaleString('id-ID');
         if (oCount) oCount.innerText = stats.ordersCount.toLocaleString('id-ID');
         if (uCount) uCount.innerText = stats.usersCount.toLocaleString('id-ID');
     } else {
-        if (pCount) pCount.innerText = DB.products.length + DB.smmServices.length;
+        if (pCount) pCount.innerText = totalServicesCount.toLocaleString('id-ID');
         if (oCount) oCount.innerText = "0";
         if (uCount) uCount.innerText = "0";
     }
@@ -358,38 +384,7 @@ async function updateRealtimeStats() {
 
 function startRealtimeEngine() {
     updateRealtimeStats();
-
-    const logContainer = document.getElementById('admin-db-logs');
-    const reqEl = document.getElementById('admin-db-req');
-    const latencyEl = document.getElementById('admin-db-latency');
-
-    setInterval(async () => {
-        const stats = await tursoClient.fetchRealtimeStats();
-        const randomLatency = Math.floor(Math.random() * 12) + 10;
-        
-        if (reqEl && stats) reqEl.innerText = (stats.ordersCount + 1200).toLocaleString();
-        if (latencyEl) latencyEl.innerText = `${randomLatency} ms`;
-
-        if (logContainer && Math.random() > 0.4) {
-            const queries = [
-                'SELECT COUNT(*) FROM orders;',
-                'SELECT * FROM smm_services WHERE status = "available";',
-                'UPDATE users SET last_login = CURRENT_TIMESTAMP;',
-                'INSERT INTO orders (id, status) VALUES (UUID(), "completed");'
-            ];
-            const randomQuery = queries[Math.floor(Math.random() * queries.length)];
-            const time = new Date().toLocaleTimeString();
-            
-            const logItem = document.createElement('div');
-            logItem.innerText = `[${time}] [TURSO API OK] ${randomQuery} (${randomLatency}ms)`;
-            logContainer.appendChild(logItem);
-            logContainer.scrollTop = logContainer.scrollHeight;
-
-            if (logContainer.children.length > 20) {
-                logContainer.removeChild(logContainer.firstChild);
-            }
-        }
-    }, 5000);
+    setInterval(() => { updateRealtimeStats(); }, 10000);
 }
 
 // --- MODALS & TOASTS ---
@@ -402,7 +397,7 @@ function showToast(message) {
     toast.className = 'toast';
     toast.innerHTML = `<span>⚡</span> ${message}`;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(() => toast.remove(), 3500);
 }
 
 // --- INITIALIZATION ---
@@ -413,9 +408,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     startRealtimeEngine();
     startBannerAutoSlide();
 
-    const services = await indosmmAPI.getServices();
-    if (services && Array.isArray(services)) {
-        DB.smmServices = services;
-        renderProducts();
+    // Jika API key tersedia di localStorage, langsung tarik ribuan layanan Indosmm secara real-time
+    if (DB.indosmmKey) {
+        const services = await indosmmAPI.getServices(DB.indosmmKey);
+        if (services && Array.isArray(services) && services.length > 0) {
+            DB.smmServices = services;
+            renderSmmTable();
+            updateRealtimeStats();
+        }
     }
 });
