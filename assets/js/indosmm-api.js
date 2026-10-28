@@ -1,32 +1,32 @@
 /**
- * Indosmm SMM Panel API Integration Module (Di dalam folder assets/js/)
+ * Indosmm SMM Panel API Integration Module
  */
 class IndosmmAPI {
     constructor() {
         this.baseUrl = CONFIG.INDOSMM.BASE_URL;
     }
 
-    // Mengambil seluruh ~9.686 layanan dari Indosmm secara real-time
+    // Mengambil seluruh ribuan layanan dari Indosmm secara real-time
     async getServices(apiKey) {
-        if (!apiKey) {
+        const keyToUse = apiKey || CONFIG.INDOSMM.API_KEY;
+        if (!keyToUse || keyToUse.includes("MASUKKAN_API_KEY")) {
             console.warn("[INDOSMM] API Key belum dimasukkan.");
             return [];
         }
 
         try {
-            // Menggunakan teknik CORS Proxy publik jika diperlukan, atau fetch langsung
             const response = await fetch(this.baseUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({
-                    api_key: apiKey,
+                    api_key: keyToUse,
                     action: "services"
                 })
             });
 
             const data = await response.json();
             if (Array.isArray(data)) {
-                return data; // Mengembalikan seluruh ribuan layanan asli Indosmm
+                return data; // Mengembalikan seluruh layanan asli Indosmm
             }
             return [];
         } catch (err) {
@@ -37,7 +37,8 @@ class IndosmmAPI {
 
     // Eksekusi pesanan nyata ke Indosmm
     async placeOrder(apiKey, serviceId, target, quantity) {
-        if (!apiKey) {
+        const keyToUse = apiKey || CONFIG.INDOSMM.API_KEY;
+        if (!keyToUse || keyToUse.includes("MASUKKAN_API_KEY")) {
             throw new Error("API Key Indosmm belum diatur!");
         }
 
@@ -46,7 +47,7 @@ class IndosmmAPI {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({
-                    api_key: apiKey,
+                    api_key: keyToUse,
                     action: "add",
                     service: serviceId,
                     target: target,
