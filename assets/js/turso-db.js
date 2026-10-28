@@ -7,10 +7,10 @@ class TursoDBClient {
         this.token = CONFIG.TURSO.AUTH_TOKEN;
     }
 
-    // Melakukan query SQL langsung ke database Turso via HTTP Pipeline
+    // Eksekusi query SQL langsung ke database Turso via HTTP Pipeline
     async executeQuery(sql, args = []) {
         if (!this.url || this.url.includes("your-turso-db-name")) {
-            console.warn("[TURSO DB] Token/URL Turso belum dikonfigurasi. Menggunakan Fallback Mock.");
+            console.warn("[TURSO DB] Token/URL Turso belum dikonfigurasi.");
             return null;
         }
 
@@ -33,18 +33,47 @@ class TursoDBClient {
             return data.results[0]?.response?.result;
         } catch (error) {
             console.error("[TURSO DB Error]", error);
-            throw error;
+            return null;
         }
     }
 
-    // Ambil Data Statistik Real-time dari Turso Database
-    async fetchStats() {
-        const query = "SELECT COUNT(*) as total_orders FROM orders;";
-        const result = await this.executeQuery(query);
-        if (result && result.rows) {
-            return { ordersCount: result.rows[0][0].value };
+    // Mengambil hitungan nyata statistik dari database Turso
+    async fetchRealtimeStats() {
+        try {
+            const queryOrders = "SELECT COUNT(*) FROM orders;";
+            const queryUsers = "SELECT COUNT(*) FROM users;";
+            const queryProducts = "SELECT COUNT(*) FROM products;";
+
+            const [resOrders, resUsers, resProducts] = await Promise.all([
+                this.executeQuery(queryOrders),
+                this.executeQuery(queryUsers),
+                this.executeQuery(queryProducts)
+            ]);
+
+            const ordersCount = resOrders?.rows?.[0]?.[0]?.value ?? 0;
+            const usersCount = resUsers?.rows?.[0]?.[0]?.value ?? 0;
+            const productsCount = resProducts?.rows?.[0]?.[0]?.value ?? 0;
+
+            return {
+                ordersCount,
+                usersCount,
+                productsCount
+            };
+        } catch (err) {
+            console.error("[TURSO STATS ERROR]", err);
+            return null;
         }
-        return null;
+    }
+
+    // Fungsi untuk menyimpan transaksi/pesanan baru secara nyata ke Turso DB
+    async createOrder(userId, productId, targetDest, totalPrice) {
+        const sql = "INSERT INTO orders (user_id, product_id, target_dest, total_price, status) VALUES (?, ?, ?, ?, 'completed');";
+        return await this.executeQuery(sql, [
+            { type: "integer", value: String(userId || 1) },
+            { type: "integer", value: String(productId || 1) },
+            { type: "text", value: String(targetDest || "guest") },
+            { type: "float", value: totalPrice }
+        ]);
     }
 }
 
