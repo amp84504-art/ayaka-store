@@ -13,7 +13,7 @@ const DB = {
         { id: 7, type: 'game', name: 'Genshin Impact Genesis Crystal', desc: 'Blessing of the Welkin Moon & Genesis Crystals.', status: 'unavailable', price: 'Varian', icon: '✨' }
     ],
     smmServices: [],
-    indosmmKey: localStorage.getItem('indosmm_api_key') || '',
+    indosmmKey: localStorage.getItem('indosmm_api_key') || (typeof CONFIG !== 'undefined' ? CONFIG.INDOSMM.API_KEY : ''),
     currentUser: JSON.parse(localStorage.getItem('ayaka_user')) || null,
     userBalance: Number(localStorage.getItem('ayaka_balance')) || 0
 };
@@ -148,7 +148,7 @@ function renderSmmTable(filterText = '') {
     smmTableBody.innerHTML = '';
 
     if (DB.smmServices.length === 0) {
-        smmTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color:#666; font-weight:700;">Belum ada layanan SMM. Silakan masukkan API Key Indosmm di Panel Admin.</td></tr>`;
+        smmTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color:#666; font-weight:700;">Belum ada layanan SMM. Silakan masukkan API Key Indosmm di config.js atau Panel Admin.</td></tr>`;
         return;
     }
 
@@ -163,7 +163,7 @@ function renderSmmTable(filterText = '') {
         return;
     }
 
-    // Batasi render 150 data teratas dari total ribuan layanan agar browser tetap cepat
+    // Batasi render 150 data teratas agar performa browser tetap responsif
     const displayList = filtered.slice(0, 150);
 
     displayList.forEach(s => {
@@ -185,10 +185,10 @@ function filterSmmServices() {
     renderSmmTable(query);
 }
 
-// Eksekusi pesanan nyata ke Indosmm & Turso DB saat tombol Pesan diklik
+// Eksekusi pesanan nyata ke Indosmm & Turso DB
 async function handleBuySmm(serviceId, serviceName, rate) {
-    if (!DB.indosmmKey) {
-        showToast('⚠️ Masukkan API Key Indosmm di Panel Admin terlebih dahulu!');
+    if (!DB.indosmmKey || DB.indosmmKey.includes("MASUKKAN_API_KEY")) {
+        showToast('⚠️ Masukkan API Key Indosmm di config.js atau Panel Admin!');
         switchView('admin');
         return;
     }
@@ -273,12 +273,11 @@ function toggleProductStatus(id) {
     }
 }
 
-// Simpan API Key Indosmm dan tarik ribuan layanan seketika
 async function saveIndosmmKey() {
     const key = document.getElementById('admin-indosmm-key').value.trim();
     DB.indosmmKey = key;
     localStorage.setItem('indosmm_api_key', key);
-    showToast('API Key disimpan! Mengambil ribuan layanan Indosmm...');
+    showToast('API Key disimpan! Mengambil layanan Indosmm...');
 
     const services = await indosmmAPI.getServices(DB.indosmmKey);
     if (services && Array.isArray(services) && services.length > 0) {
@@ -387,8 +386,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     startRealtimeEngine();
     startBannerAutoSlide();
 
-    // Jika API Key sudah tersimpan di browser, otomatis ambil ribuan layanan Indosmm
-    if (DB.indosmmKey) {
+    // Otomatis tarik ribuan layanan Indosmm saat halaman dimuat
+    if (DB.indosmmKey && !DB.indosmmKey.includes("MASUKKAN_API_KEY")) {
         const services = await indosmmAPI.getServices(DB.indosmmKey);
         if (services && Array.isArray(services) && services.length > 0) {
             DB.smmServices = services;
