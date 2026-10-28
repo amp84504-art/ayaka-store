@@ -18,7 +18,7 @@ const DB = {
     userBalance: Number(localStorage.getItem('ayaka_balance')) || 0
 };
 
-// --- BANNER CAROUSEL LOGIC ---
+// --- BANNER CAROUSEL ---
 let currentBannerIdx = 0;
 const totalBanners = 3;
 let bannerTimer = null;
@@ -26,13 +26,9 @@ let bannerTimer = null;
 function setBanner(index) {
     currentBannerIdx = index;
     const wrapper = document.getElementById('banner-wrapper');
-    if (wrapper) {
-        wrapper.style.transform = `translateX(-${currentBannerIdx * 100}%)`;
-    }
+    if (wrapper) wrapper.style.transform = `translateX(-${currentBannerIdx * 100}%)`;
     const dots = document.querySelectorAll('.carousel-dots .dot');
-    dots.forEach((dot, idx) => {
-        dot.classList.toggle('active', idx === currentBannerIdx);
-    });
+    dots.forEach((dot, idx) => dot.classList.toggle('active', idx === currentBannerIdx));
     resetBannerTimer();
 }
 
@@ -52,22 +48,17 @@ function resetBannerTimer() {
     startBannerAutoSlide();
 }
 
-// --- INTERSECTION OBSERVER ANIMASI SCROLL ---
 function initScrollAnimations() {
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            } else {
-                entry.target.classList.remove('visible');
-            }
+            if (entry.isIntersecting) entry.target.classList.add('visible');
+            else entry.target.classList.remove('visible');
         });
     }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
     document.querySelectorAll('.reveal-on-scroll').forEach(el => observer.observe(el));
 }
 
-// --- CORE NAVIGATION ---
 function switchView(viewName) {
     document.querySelectorAll('.view-section').forEach(el => el.style.display = 'none');
     const target = document.getElementById(`view-${viewName}`);
@@ -101,7 +92,6 @@ function toggleSidebar() {
     sidebar.classList.toggle('active');
 }
 
-// --- RENDER PRODUCTS & SMM TABLE ---
 function renderProducts() {
     const appGrid = document.getElementById('app-grid');
     const gameGrid = document.getElementById('game-grid');
@@ -158,7 +148,7 @@ function renderSmmTable(filterText = '') {
     smmTableBody.innerHTML = '';
 
     if (DB.smmServices.length === 0) {
-        smmTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color:#666; font-weight:700;">Memuat layanan dari Indosmm API... (Pastikan API Key sudah diset di Panel Admin)</td></tr>`;
+        smmTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 24px; color:#666; font-weight:700;">Belum ada layanan SMM. Silakan masukkan API Key Indosmm di Panel Admin.</td></tr>`;
         return;
     }
 
@@ -173,7 +163,7 @@ function renderSmmTable(filterText = '') {
         return;
     }
 
-    // Batasi render maksimal 100 data pertama saat pencarian kosong agar performa browser tetap ringan, atau tampilkan semua sesuai filter
+    // Batasi render 150 data teratas dari total ribuan layanan agar browser tetap cepat
     const displayList = filtered.slice(0, 150);
 
     displayList.forEach(s => {
@@ -195,10 +185,10 @@ function filterSmmServices() {
     renderSmmTable(query);
 }
 
-// --- EKSEKUSI NYATA PEMESANAN SMM ---
+// Eksekusi pesanan nyata ke Indosmm & Turso DB saat tombol Pesan diklik
 async function handleBuySmm(serviceId, serviceName, rate) {
     if (!DB.indosmmKey) {
-        showToast('⚠️ Masukkan API Key Indosmm terlebih dahulu di Panel Admin!');
+        showToast('⚠️ Masukkan API Key Indosmm di Panel Admin terlebih dahulu!');
         switchView('admin');
         return;
     }
@@ -216,11 +206,10 @@ async function handleBuySmm(serviceId, serviceName, rate) {
         
         if (result && result.order) {
             showToast(`✅ Berhasil! ID Order Indosmm: #${result.order}`);
-            // Catat transaksi nyata ke Turso Database
             await tursoClient.createOrder(DB.currentUser ? DB.currentUser.id : 1, serviceId, target, Number(rate) * (quantity / 1000));
             updateRealtimeStats();
         } else {
-            showToast(`❌ Gagal: ${result.error || 'Periksa kembali saldo / API Key Anda'}`);
+            showToast(`❌ Gagal: ${result.error || 'Periksa kembali saldo/API Key Anda'}`);
         }
     } catch (err) {
         showToast('❌ Koneksi ke API Indosmm gagal.');
@@ -228,11 +217,8 @@ async function handleBuySmm(serviceId, serviceName, rate) {
     }
 }
 
-function toggleFaq(element) {
-    element.classList.toggle('active');
-}
+function toggleFaq(element) { element.classList.toggle('active'); }
 
-// --- USER DASHBOARD & ADMIN PANEL ---
 function renderDashboard() {
     const container = document.getElementById('dashboard-content');
     if (!container) return;
@@ -241,7 +227,7 @@ function renderDashboard() {
         container.innerHTML = `
             <div class="brutal-card" style="padding: 32px; text-align: center;">
                 <h3>Anda Belum Login</h3>
-                <p style="margin: 10px 0 20px 0; font-size:14px;">Silakan login terlebih dahulu untuk mengakses dashboard dan riwayat akun.</p>
+                <p style="margin: 10px 0 20px 0; font-size:14px;">Silakan login terlebih dahulu untuk mengakses dashboard.</p>
                 <button class="brutal-btn" onclick="openModal('modal-login')">Login Sekarang</button>
             </div>`;
         return;
@@ -255,9 +241,6 @@ function renderDashboard() {
         <div class="stats-grid">
             <div class="brutal-card stat-card"><div class="stat-number">0</div><div class="stat-label">Pesanan Aktif</div></div>
             <div class="brutal-card stat-card"><div class="stat-number">Rp ${DB.userBalance.toLocaleString('id-ID')}</div><div class="stat-label">Saldo Wallet</div></div>
-        </div>
-        <div style="text-align:center; margin-top:10px;">
-            <button class="brutal-btn" onclick="switchView('topup')">💳 Isi Saldo via QRIS</button>
         </div>`;
 }
 
@@ -290,25 +273,24 @@ function toggleProductStatus(id) {
     }
 }
 
+// Simpan API Key Indosmm dan tarik ribuan layanan seketika
 async function saveIndosmmKey() {
     const key = document.getElementById('admin-indosmm-key').value.trim();
     DB.indosmmKey = key;
     localStorage.setItem('indosmm_api_key', key);
-    showToast('API Key Indosmm disimpan! Memuat ulang layanan...');
-    
-    // Muat ulang ribuan layanan dari Indosmm dengan API Key baru
+    showToast('API Key disimpan! Mengambil ribuan layanan Indosmm...');
+
     const services = await indosmmAPI.getServices(DB.indosmmKey);
-    if (services && Array.isArray(services)) {
+    if (services && Array.isArray(services) && services.length > 0) {
         DB.smmServices = services;
         renderSmmTable();
         updateRealtimeStats();
-        showToast(`✅ Berhasil memuat ${services.length.toLocaleString('id-ID')} layanan dari Indosmm!`);
+        showToast(`✅ Berhasil memuat ${services.length.toLocaleString('id-ID')} layanan Indosmm!`);
     } else {
         showToast('❌ Gagal memuat layanan. Periksa kembali API Key Anda.');
     }
 }
 
-// --- AUTHENTICATION ---
 function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value;
@@ -362,7 +344,6 @@ function updateAuthUI() {
     }
 }
 
-// --- REAL-TIME STATS ENGINE (TURSO DB & INDOSMM) ---
 async function updateRealtimeStats() {
     const pCount = document.getElementById('stat-products-count');
     const oCount = document.getElementById('stat-orders-count');
@@ -387,7 +368,6 @@ function startRealtimeEngine() {
     setInterval(() => { updateRealtimeStats(); }, 10000);
 }
 
-// --- MODALS & TOASTS ---
 function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
@@ -400,7 +380,6 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 3500);
 }
 
-// --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
     renderProducts();
     updateAuthUI();
@@ -408,13 +387,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     startRealtimeEngine();
     startBannerAutoSlide();
 
-    // Jika API key tersedia di localStorage, langsung tarik ribuan layanan Indosmm secara real-time
+    // Jika API Key sudah tersimpan di browser, otomatis ambil ribuan layanan Indosmm
     if (DB.indosmmKey) {
         const services = await indosmmAPI.getServices(DB.indosmmKey);
         if (services && Array.isArray(services) && services.length > 0) {
             DB.smmServices = services;
             renderSmmTable();
             updateRealtimeStats();
+            showToast(`✅ Berhasil memuat ${services.length.toLocaleString('id-ID')} layanan Indosmm!`);
         }
     }
 });
