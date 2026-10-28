@@ -9,7 +9,7 @@ const CONFIG = {
     },
     // Endpoints Indosmm API Gateway (SMM Panel)
     INDOSMM: {
-        BASE_URL: "https://indosmm.id/api/v2",
+        BASE_URL: "",
         DEFAULT_API_KEY: ""
     },
     // Pengaturan Aplikasi
